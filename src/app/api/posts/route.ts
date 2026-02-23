@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 // LangGraph local dev API
-const LANGGRAPH_URL = "http://127.0.0.1:2024";
+const LANGGRAPH_URL = "http://47.82.164.26:2024";
 
 interface SocialPost {
   title: string;
