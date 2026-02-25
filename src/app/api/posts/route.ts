@@ -1,129 +1,83 @@
 import { NextResponse } from "next/server";
 
-// LangGraph local dev API
-const LANGGRAPH_URL = "http://47.82.164.26:2024";
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 
-interface SocialPost {
+interface SupabasePost {
+  id: string;
+  created_at: string;
   title: string;
-  twitter: string;
-  instagram: string;
-  facebook: string;
-  sources: string[];
-  images: { twitter: boolean; instagram: boolean; facebook: boolean };
-}
-
-function parseSocialPosts(markdown: string): SocialPost {
-  const result: SocialPost = {
-    title: "",
-    twitter: "",
-    instagram: "",
-    facebook: "",
-    sources: [],
-    images: { twitter: false, instagram: false, facebook: false },
-  };
-
-  const titleMatch = markdown.match(/^#\s+(.+)$/m);
-  if (titleMatch) result.title = titleMatch[1].trim();
-
-  function extractSection(pattern: string, ...stopPatterns: string[]): string {
-    const stops = stopPatterns
-      .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join("|");
-    const regex = new RegExp(
-      `##\\s+${pattern}\\s*\\n([\\s\\S]*?)(?=##\\s+(?:${stops})|$)`,
-      "i"
-    );
-    const match = markdown.match(regex);
-    return match ? match[1].trim() : "";
-  }
-
-  result.twitter = extractSection(
-    "X \\(Twitter\\)|Twitter",
-    "Instagram", "Facebook", "Sources", "Images"
-  ).replace(/\*Character count:.*\*/gi, "").trim();
-
-  result.instagram = extractSection(
-    "Instagram",
-    "Facebook", "Sources", "Images"
-  );
-
-  result.facebook = extractSection(
-    "Facebook",
-    "Sources", "Images"
-  );
-
-  const sourcesSection = extractSection("Sources", "Images", "STOP");
-  if (sourcesSection) {
-    result.sources = sourcesSection
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("["));
-  }
-
-  result.images.twitter = markdown.includes("output/twitter.png") || markdown.includes("twitter.png");
-  result.images.instagram = markdown.includes("output/instagram.png") || markdown.includes("instagram.png");
-  result.images.facebook = markdown.includes("output/facebook.png") || markdown.includes("facebook.png");
-
-  return result;
+  twitter: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  sources: string[] | null;
+  has_image: boolean;
+  image_url: string | null;
+  raw_markdown: string | null;
 }
 
 export async function GET() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return NextResponse.json(
+      { success: false, error: "Supabase credentials not configured." },
+      { status: 503 }
+    );
+  }
+
   try {
-    // Get all threads, pick the most recent one
-    const threadsRes = await fetch(
-      `${LANGGRAPH_URL}/threads?limit=10&status=idle`,
-      { cache: "no-store" }
+    // Fetch the most recent post
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/social_posts?order=created_at.desc&limit=1`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      }
     );
 
-    if (!threadsRes.ok) {
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("Supabase error:", err);
       return NextResponse.json(
-        { success: false, error: "Cannot reach LangGraph server at port 2024" },
-        { status: 503 }
+        { success: false, error: "Failed to fetch from database." },
+        { status: 502 }
       );
     }
 
-    const threads = await threadsRes.json();
+    const rows: SupabasePost[] = await res.json();
 
-    if (!threads || threads.length === 0) {
+    if (!rows || rows.length === 0) {
       return NextResponse.json(
-        { success: false, error: "No agent runs found. Run the agent first." },
+        {
+          success: false,
+          error: "No posts yet. Run the agent with a news story first.",
+        },
         { status: 404 }
       );
     }
 
-    // Try threads from newest to oldest
-    for (const thread of threads) {
-      const stateRes = await fetch(
-        `${LANGGRAPH_URL}/threads/${thread.thread_id}/state`,
-        { cache: "no-store" }
-      );
-      if (!stateRes.ok) continue;
+    const row = rows[0];
 
-      const state = await stateRes.json();
-      const files: Record<string, string> = state?.values?.files ?? {};
-
-      // Look for social_posts.md (stored with or without leading slash)
-      const postContent =
-        files["/social_posts.md"] ?? files["social_posts.md"];
-
-      if (postContent) {
-        const posts = parseSocialPosts(postContent);
-        return NextResponse.json({ success: true, posts });
-      }
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "No posts found in recent agent runs. Run the agent with a news story first.",
+    return NextResponse.json({
+      success: true,
+      posts: {
+        id: row.id,
+        title: row.title,
+        twitter: row.twitter ?? "",
+        instagram: row.instagram ?? "",
+        facebook: row.facebook ?? "",
+        sources: row.sources ?? [],
+        image: row.has_image,
+        image_url: row.image_url ?? null,
       },
-      { status: 404 }
-    );
+    });
   } catch (err) {
     console.error("Posts API error:", err);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch posts from LangGraph." },
+      { success: false, error: "Unexpected error fetching posts." },
       { status: 500 }
     );
   }
