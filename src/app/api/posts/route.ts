@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
+// Support both NEXT_PUBLIC_ prefixed and non-prefixed env vars
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY =
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 interface SupabasePost {
   id: string;
@@ -14,10 +19,12 @@ interface SupabasePost {
   has_image: boolean;
   image_url: string | null;
   raw_markdown: string | null;
+  published_to: Record<string, boolean> | null;
 }
 
 export async function GET() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error("Missing Supabase env vars. SUPABASE_URL:", !!SUPABASE_URL, "KEY:", !!SUPABASE_ANON_KEY);
     return NextResponse.json(
       { success: false, error: "Supabase credentials not configured." },
       { status: 503 }
@@ -25,9 +32,9 @@ export async function GET() {
   }
 
   try {
-    // Fetch the most recent post
+    // Fetch ALL posts, newest first (no limit — show everything)
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/social_posts?order=created_at.desc&limit=1`,
+      `${SUPABASE_URL}/rest/v1/social_posts?order=created_at.desc&limit=100`,
       {
         headers: {
           apikey: SUPABASE_ANON_KEY,
@@ -51,29 +58,26 @@ export async function GET() {
 
     if (!rows || rows.length === 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "No posts yet. Run the agent with a news story first.",
-        },
+        { success: false, error: "No posts yet. Run the agent with a news story first." },
         { status: 404 }
       );
     }
 
-    const row = rows[0];
+    // Return all posts shaped for the UI
+    const posts = rows.map((row) => ({
+      id: row.id,
+      created_at: row.created_at,
+      title: row.title,
+      twitter: row.twitter ?? "",
+      instagram: row.instagram ?? "",
+      facebook: row.facebook ?? "",
+      sources: row.sources ?? [],
+      image: row.has_image,
+      image_url: row.image_url ?? null,
+      published_to: row.published_to ?? {},
+    }));
 
-    return NextResponse.json({
-      success: true,
-      posts: {
-        id: row.id,
-        title: row.title,
-        twitter: row.twitter ?? "",
-        instagram: row.instagram ?? "",
-        facebook: row.facebook ?? "",
-        sources: row.sources ?? [],
-        image: row.has_image,
-        image_url: row.image_url ?? null,
-      },
-    });
+    return NextResponse.json({ success: true, posts });
   } catch (err) {
     console.error("Posts API error:", err);
     return NextResponse.json(

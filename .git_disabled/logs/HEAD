@@ -1,0 +1,5 @@
+0000000000000000000000000000000000000000 80c92a2c1be0f85312fbdc64dd35865662b3bd22 asif23gf <you@example.com> 1771817882 +0500	commit (initial): first commit
+80c92a2c1be0f85312fbdc64dd35865662b3bd22 0000000000000000000000000000000000000000 asif23gf <you@example.com> 1771817883 +0500	Branch: renamed refs/heads/master to refs/heads/main
+0000000000000000000000000000000000000000 80c92a2c1be0f85312fbdc64dd35865662b3bd22 asif23gf <you@example.com> 1771817883 +0500	Branch: renamed refs/heads/master to refs/heads/main
+80c92a2c1be0f85312fbdc64dd35865662b3bd22 743224ef375454f6d3a32367eb92b5df0c910c2e asif23gf <you@example.com> 1771819089 +0500	commit: update backend ip to public ubuntu ip
+743224ef375454f6d3a32367eb92b5df0c910c2e 294a071f2c6c8c49c891728b58257fd3640b0ab8 asif23gf <you@example.com> 1771990861 +0500	commit: feat: redesign posts page with authentic platform UI; add delete post feature (API route + UI)
